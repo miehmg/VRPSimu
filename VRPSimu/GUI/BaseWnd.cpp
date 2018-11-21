@@ -3,10 +3,15 @@
 #include "BaseWnd.h"
 #include "../Model/GraphModel.h"
 #include "../Model/Solution.h"
+#pragma comment(lib, "d2d1")
+#pragma comment(lib, "dwrite.lib")
+#pragma comment(lib, "windowscodecs.lib")
 
-static UINT32 time_slice = 100;
+static UINT32 time_slice = 500;
 static float animate_time;
+static int brush_number;
 static vector<bool> showlocus;
+
 
 D2D1_POINT_2F BaseWnd::GC_To_D2Point(GraphCoor gc)
 {
@@ -90,9 +95,13 @@ HRESULT BaseWnd::Initialize(std::tuple<GraphModel&, Solution&>* model)
 
 BaseWnd::BaseWnd() :
 	hwnd(NULL),
+	pCarBitmap(NULL),
+	pShopBitmap(NULL),
+	pHouseBitmap(NULL),
 	pDirect2dFactory(NULL),
+	pIWICFactory(NULL),
 	pRenderTarget(NULL),
-
+	pBitmapRenderTarget(NULL),
 	pLightSlateGrayBrush(NULL),
 	pCornflowerBlueBrush(NULL),
 	pPaleVioletRedBrush(NULL),
@@ -170,6 +179,11 @@ HRESULT BaseWnd::CreateDeviceDependentResources()
 		//	rc.bottom - rc.top,
 		//	rc.bottom - rc.top
 		//);
+
+		if (SUCCEEDED(hr))
+		{
+			// create bitmap render target
+		}
 
 		if (SUCCEEDED(hr))
 		{
@@ -271,6 +285,48 @@ HRESULT BaseWnd::CreateDeviceDependentResources()
 			);
 			brush_pool.push_back(brush);
 		}
+		brush_number = brush_pool.size();
+		if (SUCCEEDED(hr))
+		{
+			HRESULT hr = CoCreateInstance(
+				CLSID_WICImagingFactory,
+				NULL,
+				CLSCTX_INPROC_SERVER,
+				IID_IWICImagingFactory,
+				(LPVOID*)&pIWICFactory
+			);
+		}
+		//if (SUCCEEDED(hr))
+		//{
+		//	pBitmapRenderTarget->BeginDraw();
+		//	pBitmapRenderTarget->
+		//		pBitmapRenderTarget->EndDraw();
+		//}
+		if (SUCCEEDED(hr))
+		{
+			std::wstring str = L"img\\car.png";
+			PCWSTR cstr = str.c_str();
+			HRESULT hr = loadBitmapFromFile(pRenderTarget, pIWICFactory, cstr, 20, 20, &pCarBitmap);
+			auto bitsize = pCarBitmap->GetSize();
+			if (SUCCEEDED(hr))
+			{
+				std::wstring str = L"img\\shop.png";
+				PCWSTR cstr = str.c_str();
+				HRESULT hr = loadBitmapFromFile(pRenderTarget, pIWICFactory, cstr, 20, 20, &pShopBitmap);
+				if (SUCCEEDED(hr))
+				{
+					std::wstring str = L"img\\house.png";
+					PCWSTR cstr = str.c_str();
+					HRESULT hr = loadBitmapFromFile(pRenderTarget, pIWICFactory, cstr, 20, 20, &pHouseBitmap);
+					D2D1_BITMAP_BRUSH_PROPERTIES brushProperties =
+						D2D1::BitmapBrushProperties(D2D1_EXTEND_MODE_WRAP, D2D1_EXTEND_MODE_WRAP);
+					hr = pRenderTarget->CreateBitmapBrush(pCarBitmap, brushProperties, &pCarBitmapBrush);
+					hr = pRenderTarget->CreateBitmapBrush(pShopBitmap, brushProperties, &pShopBitmapBrush);
+					hr = pRenderTarget->CreateBitmapBrush(pHouseBitmap, brushProperties, &pHouseBitmapBrush);
+
+				}
+			}
+		}
 	}
 
 	return hr;
@@ -334,6 +390,7 @@ LRESULT CALLBACK BaseWnd::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM
 		LPCREATESTRUCT pcs = (LPCREATESTRUCT)lParam;
 		BaseWnd *pBaseWnd = (BaseWnd *)pcs->lpCreateParams;
 
+		// store this wndobject in hwnd
 		::SetWindowLongPtrW(
 			hwnd,
 			GWLP_USERDATA,
@@ -341,7 +398,6 @@ LRESULT CALLBACK BaseWnd::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM
 		);
 		pBaseWnd->StartTimer(hwnd);
 		result = 1;
-		//pBaseWnd
 	}
 	else
 	{
@@ -433,7 +489,7 @@ void BaseWnd::OnResize(UINT width, UINT height)
 	{
 		// Note: This method can fail, but it's okay to ignore the
 		// error here, because the error will be returned again
-		// the next timer_time EndDraw is called.
+		// the next time EndDraw is called.
 		pRenderTarget->Resize(D2D1::SizeU(width, height));
 	}
 }
@@ -455,7 +511,7 @@ void __stdcall BaseWnd::OnTimer()
 
 	if (timer_time != INT_MAX)
 	{
-		int slice = 10;
+		int slice = 50;
 		for (int i = 0; i != slice; i++)
 		{
 			float fi = i;
@@ -481,48 +537,25 @@ HRESULT BaseWnd::OnRender(float animate_time, float mouse_x, float mouse_y, bool
 	if (SUCCEEDED(hr))
 	{
 		pRenderTarget->BeginDraw();
-		pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
+		//pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 		pRenderTarget->Clear(D2D1::ColorF(D2D1::ColorF::White));
 		D2D1_SIZE_F rtSize = pRenderTarget->GetSize();
 		int width = static_cast<int>(rtSize.width);
 		int height = static_cast<int>(rtSize.height);
+		float main_left = (width - height) / 2;
+		float main_right = (width + height) / 2;
+		float main_top = 0;
+		float main_bottom = height;
 
 		GraphModel gm = std::get<0>(*model);
 		Solution sln = std::get<1>(*model);
-		//{
-			//const RECT main_area{ (width - height) / 2, 0, (width + height) / 2, height };
-			//InvalidateRect(this->hwnd, &main_area, FALSE);
-			//static int xc = 100;
-			//xc += 5;
-			//for (int x = 0; x < xc; x+=10)
-			//{
-			//	pRenderTarget->DrawLine(
-			//		D2D1::Point2F(static_cast<FLOAT>(100), xc-100),
-			//		D2D1::Point2F(static_cast<FLOAT>(100), xc),
-			//		pLightSlateGrayBrush,
-			//		0.5f
-			//	);
-			////}
-			//for (int x = 0; x < width; x += height/(gm.geo_size/300))
-			//{
-			//	pRenderTarget->DrawLine(
-			//		D2D1::Point2F(static_cast<FLOAT>(x), 0.0f),
-			//		D2D1::Point2F(static_cast<FLOAT>(x), rtSize.height),
-			//		pLightSlateGrayBrush,
-			//		0.5f
-			//	);
-			//}
-			//for (int y = 0; y < 21; y += gm.geo_size/20)
-			//{
-			//	pRenderTarget->DrawLine(
-			//		D2D1::Point2F(0.0f, static_cast<FLOAT>(y)),
-			//		D2D1::Point2F(rtSize.width, static_cast<FLOAT>(y)),
-			//		pLightSlateGrayBrush,
-			//		0.5f
-			//	);
-			//}
-		//}
 		vector<Route>& routes = sln.vehicle_routes;
+		int stride = gm.stride;
+
+		for (int i = draw_locus.size(); i < routes.size(); i++)
+		{
+			draw_locus.push_back(true);
+		}
 
 		if (!end)
 		{
@@ -551,9 +584,171 @@ HRESULT BaseWnd::OnRender(float animate_time, float mouse_x, float mouse_y, bool
 			}
 		}
 
-		if (end)
+
+		// right panel
+		std::wstring str = L"Draw Vehicle Route";
+		const WCHAR* cstr = str.c_str();
+		D2D1_RECT_F layoutRect = D2D1::RectF((width + height) / 2 + 20, 30, (width + height) / 2 + 80, 35);
+		pRenderTarget->DrawTextW(cstr, wcslen(cstr), pTextFormat, layoutRect, pCornflowerBlueBrush, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+		for (auto r = routes.begin(); r != routes.end(); r++)
 		{
-			static int brush_number = brush_pool.size();
+			float space = (width - height) / 2;
+			int vhcl_num = r->vhcl_num;
+			std::wstring str = L"Vehicle" + std::to_wstring(r->vhcl_num + 1);
+			const WCHAR* cstr = str.c_str();
+			float x = width - space + 10, y = 20 * vhcl_num + 60;
+			D2D1_RECT_F layoutRect = D2D1::RectF(width - space + 20, 20 * vhcl_num + 50, width - space + 70, 20 * vhcl_num + 70);
+			pRenderTarget->DrawTextW(cstr, wcslen(cstr), pTextFormat, layoutRect, pCornflowerBlueBrush, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+
+			// radio button
+			if (draw_locus[vhcl_num] == true)
+			{
+				pRenderTarget->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, y), 2, 2), pLightSeaGreenBrush);
+			}
+			else
+			{
+				pRenderTarget->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(x, y), 2, 2), pLightSeaGreenBrush);
+			}
+		}
+
+
+		if (!end)
+			// not end
+		{
+			float stridex = (width - height) / 2;
+			for (int i = 0; i <= stride; i++)
+			{
+				pRenderTarget->DrawLine(
+					D2D1::Point2F(stridex, 0),
+					D2D1::Point2F(stridex, height),
+					pCornflowerBlueBrush
+				);
+				stridex += height / stride;
+			}
+			float stridey = 0;
+			for (int i = 0; i <= stride; i++)
+			{
+				pRenderTarget->DrawLine(
+					D2D1::Point2F((width - height) / 2, stridey),
+					D2D1::Point2F((width + height) / 2, stridey),
+					pCornflowerBlueBrush
+				);
+				stridey += height / stride;
+			}
+			vector<VerticeState> vss = sln.vertice_states;
+			for (VerticeState vs : vss)
+			{
+				if (vs.vertice.strt_time <= timer_time)
+				{
+					PDVertice v = vs.vertice;
+					float x_origin = v.coor.xcoor * min(width, height) / gm.geo_size + height / 2;
+					float y_origin = -v.coor.ycoor * min(width, height) / gm.geo_size + height / 2;
+					int space = height / stride;
+					int x_district = x_origin / space;
+					int y_district = y_origin / space;
+					float x = main_left + x_district * space + (float)space / 2;
+					float y = main_top + y_district * space + (float)space / 2;
+					std::wstring str;
+					str = std::to_wstring(v.order_no + 1);
+					const WCHAR* cstr = str.c_str();
+					ID2D1SolidColorBrush* blackbrush;
+					pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black), &blackbrush);
+					//ID2D1Bitmap* p_bitmap;
+
+					if (vs.vertice.strt_time <= timer_time)
+					{
+						if (vs.complete_time > timer_time)
+						{
+							pRenderTarget->DrawTextW(
+								cstr,
+								std::wcslen(cstr),
+								pTextFormat,
+								D2D1::RectF(x - 10, y - 5, x + 10, y + 15),
+								blackbrush
+							);
+							if (vs.vertice.isDest())
+							{
+								drawHouse(pRenderTarget, x, y, 24, 24, pPaleVioletRedBrush);
+							}
+							else
+							{
+								drawShop(pRenderTarget, x, y, 24, 24, pPaleVioletRedBrush);
+							}
+						}
+						else if (vs.complete_time > timer_time - 5)
+						{
+							pRenderTarget->DrawTextW(
+								cstr,
+								std::wcslen(cstr),
+								pTextFormat,
+								D2D1::RectF(x - 10, y - 5, x + 10, y + 15),
+								blackbrush
+							);
+							if (vs.vertice.isDest())
+							{
+								drawHouse(pRenderTarget, x, y, 24, 24, pLightSeaGreenBrush);
+							}
+							else
+							{
+								drawShop(pRenderTarget, x, y, 24, 24, pLightSeaGreenBrush);
+							}
+						}
+					}
+				}
+			}
+
+			// #car
+			for (Route r : routes)
+			{
+				GraphCoor* gc = getlocation(r, animate_time);
+				if (gc == NULL) {
+					continue;
+				}
+				float x = gc->xcoor * min(width, height) / gm.geo_size + width / 2;
+				float y = -gc->ycoor * min(width, height) / gm.geo_size + height / 2;
+				D2D1_ELLIPSE dot = D2D1::Ellipse(D2D1::Point2F(x, y), 3, 3);
+				//drawHouse(pRenderTarget, x, y, 24, 24, pLightSeaGreenBrush);
+				drawShop(pRenderTarget, x, y, 24, 24, pLightSeaGreenBrush);
+				//pRenderTarget->FillEllipse(dot, pCornflowerBlueBrush);
+				//pRenderTarget->DrawBitmap(
+				//	pCarBitmap,
+				//	D2D1::RectF(x - 10, y - 10, x + 10, y + 10)
+				//);
+
+
+			}
+
+		}
+		else
+		{
+			// #distri panel
+			int left_margin = 20, right_margin = 70;
+			vector<int> time_distri;
+			int interval = gm.time_span / brush_number + 1;
+			for (int i = 0; i < brush_number; i++)
+			{
+				time_distri.push_back(0);
+			}
+			for (PDVertice v : gm.vertices)
+			{
+				int section = (v.strt_time + gm.time_span / 2) / interval;
+				time_distri[section]++;
+			}
+			for (int i = 0; i < brush_number; i++)
+			{
+				int scale = 50 / gm.order_size + 1;
+				int left_start = 45, top_start = 20;
+				pRenderTarget->FillEllipse(D2D1::Ellipse(D2D1::Point2F(left_start, i * 20 + 30), 2, 2), brush_pool[i]);
+				pRenderTarget->FillRectangle(D2D1::RectF(left_start + 5, i * 20 + top_start, left_start + 5 + time_distri[i] / 2 * scale, i * 20 + top_start + 20), brush_pool[i]);
+				std::wstring str = std::to_wstring(i * interval) + L"-" + std::to_wstring((i + 1)*interval);
+				const WCHAR* cstr = str.c_str();
+				D2D1_RECT_F layoutRect = D2D1::RectF(5, i * 20 + 20, 45, i * 20 + 40);
+				pRenderTarget->DrawTextW(cstr, wcslen(cstr), pTextFormat, layoutRect, pCornflowerBlueBrush);
+				layoutRect = D2D1::RectF(left_start + 10 + time_distri[i] / 2 * scale, i * 20 + 20, left_start + time_distri[i] / 2 * scale + 30, i * 20 + 40);
+				std::wstring num = std::to_wstring(time_distri[i] / 2);
+				const WCHAR* cnum = num.c_str();
+				pRenderTarget->DrawTextW(cnum, wcslen(cnum), pTextFormat, layoutRect, brush_pool[i]);
+			}
 
 			// routes
 			for (auto ri = routes.begin(); ri != routes.end(); ri++)
@@ -629,61 +824,6 @@ HRESULT BaseWnd::OnRender(float animate_time, float mouse_x, float mouse_y, bool
 					lsttime = nexttime;
 				}
 			}
-
-			// left panel
-			int left_margin = 20, right_margin = 70;
-			vector<int> time_distri;
-			int interval = gm.time_span / brush_number + 1;
-			for (int i = 0; i < brush_number; i++)
-			{
-				time_distri.push_back(0);
-			}
-			for (PDVertice v : gm.vertices)
-			{
-				int section = (v.strt_time + gm.time_span / 2) / interval;
-				time_distri[section]++;
-			}
-			for (int i = 0; i < brush_number; i++)
-			{
-				int scale = 50 / gm.order_size + 1;
-				int left_start = 45, top_start = 20;
-				pRenderTarget->FillEllipse(D2D1::Ellipse(D2D1::Point2F(left_start, i * 20 + 30), 2, 2), brush_pool[i]);
-				pRenderTarget->FillRectangle(D2D1::RectF(left_start + 5, i * 20 + top_start, left_start + 5 + time_distri[i] / 2 * scale, i * 20 + top_start + 20), brush_pool[i]);
-				std::wstring str = std::to_wstring(i * interval) + L"-" + std::to_wstring((i + 1)*interval);
-				const WCHAR* cstr = str.c_str();
-				D2D1_RECT_F layoutRect = D2D1::RectF(5, i * 20 + 20, 45, i * 20 + 40);
-				pRenderTarget->DrawTextW(cstr, wcslen(cstr), pTextFormat, layoutRect, pCornflowerBlueBrush);
-				layoutRect = D2D1::RectF(left_start + 10 + time_distri[i] / 2 * scale, i * 20 + 20, left_start + time_distri[i] / 2 * scale + 30, i * 20 + 40);
-				std::wstring num = std::to_wstring(time_distri[i] / 2);
-				const WCHAR* cnum = num.c_str();
-				pRenderTarget->DrawTextW(cnum, wcslen(cnum), pTextFormat, layoutRect, brush_pool[i]);
-			}
-
-			// right panel
-			std::wstring str = L"Draw Vehicle Route";
-			const WCHAR* cstr = str.c_str();
-			D2D1_RECT_F layoutRect = D2D1::RectF((width + height) / 2 + 20, 30, (width + height) / 2 + 80, 35);
-			pRenderTarget->DrawTextW(cstr, wcslen(cstr), pTextFormat, layoutRect, pCornflowerBlueBrush, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
-			for (auto r = routes.begin(); r != routes.end(); r++)
-			{
-				float space = (width - height) / 2;
-				int vhcl_num = r->vhcl_num;
-				std::wstring str = L"Vehicle" + std::to_wstring(r->vhcl_num + 1);
-				const WCHAR* cstr = str.c_str();
-				float x = width - space + 10, y = 20 * vhcl_num + 60;
-				D2D1_RECT_F layoutRect = D2D1::RectF(width - space + 20, 20 * vhcl_num + 50, width - space + 70, 20 * vhcl_num + 70);
-				pRenderTarget->DrawTextW(cstr, wcslen(cstr), pTextFormat, layoutRect, pCornflowerBlueBrush, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
-
-				// radio button
-				if (draw_locus[vhcl_num] == true)
-				{
-					pRenderTarget->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, y), 2, 2), pLightSeaGreenBrush);
-				}
-				else
-				{
-					pRenderTarget->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(x, y), 2, 2), pLightSeaGreenBrush);
-				}
-			}
 			// z1_layer
 			/*for (InfoPopup info : z1_layer)
 			{
@@ -721,61 +861,6 @@ HRESULT BaseWnd::OnRender(float animate_time, float mouse_x, float mouse_y, bool
 					pRenderTarget->DrawTextW(info.text.c_str(), wcslen(info.text.c_str()), pTextFormat, layoutRect, pCornflowerBlueBrush);
 				}
 			}*/
-		}
-		// not end
-		else
-		{
-			vector<VerticeState> vss = sln.vertice_states;
-			for (VerticeState vs : vss)
-			{
-				if (vs.vertice.strt_time <= timer_time)
-				{
-					PDVertice v = vs.vertice;
-					float x = v.coor.xcoor * min(width, height) / gm.geo_size + width / 2;
-					float y = -v.coor.ycoor * min(width, height) / gm.geo_size + height / 2;
-					D2D1_RECT_F layoutRect = D2D1::RectF(x - 10, y - 10, x + 10, y + 10);
-					std::wstring str;
-					if (v.isDest())
-					{
-						str = std::to_wstring(v.order_no + 1) + L"b";
-					}
-					else
-					{
-						str = std::to_wstring(v.order_no + 1) + L"a";
-					}
-					const WCHAR* cstr = str.c_str();
-
-					if (vs.complete_time > timer_time && vs.complete_time < timer_time + 5)
-					{
-						pRenderTarget->DrawTextW(cstr, wcslen(cstr), pTextFormat, layoutRect, pPaleVioletRedBrush, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
-						//pRenderTarget->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, y), 2, 2), pPaleVioletRedBrush);
-					}
-					else if (vs.complete_time > timer_time)
-					{
-						//pRenderTarget->DrawTextW(cstr, wcslen(cstr), pTextFormat, layoutRect, pLightSlateGrayBrush, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
-						//pRenderTarget->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, y), 2, 2), pPaleVioletRedBrush);
-					}
-					else if (vs.complete_time <= timer_time && vs.complete_time > timer_time - 5)
-					{
-						pRenderTarget->DrawTextW(cstr, wcslen(cstr), pTextFormat, layoutRect, pLightSeaGreenBrush, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
-						//pRenderTarget->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, y), 2, 2), pLightSeaGreenBrush);
-					}
-				}
-			}
-
-			for (Route r : routes)
-			{
-				GraphCoor* gc = getlocation(r, animate_time);
-				if (gc == NULL) {
-					continue;
-				}
-				float x = gc->xcoor * min(width, height) / gm.geo_size + width / 2;
-				float y = -gc->ycoor * min(width, height) / gm.geo_size + height / 2;
-				D2D1_ELLIPSE dot = D2D1::Ellipse(D2D1::Point2F(x, y), 3, 3);
-				pRenderTarget->FillEllipse(dot, pCornflowerBlueBrush);
-
-			}
-
 		}
 		hr = pRenderTarget->EndDraw();
 	}
@@ -838,7 +923,7 @@ void BaseWnd::OnMouseMove(int pixelX, int pixelY, DWORD flags)
 {
 }
 
-GraphCoor* BaseWnd::getlocation(Route r, float time)
+void BaseWnd::drawLocus&Cars(Route r, float time)
 {
 	GraphModel gm = std::get<0>(*this->model);
 	GraphCoor *lst = NULL, *curr = NULL, *next = NULL;
@@ -906,5 +991,253 @@ GraphCoor* BaseWnd::getlocation(Route r, float time)
 		ycoor = lst->ycoor < next->ycoor ? lst->ycoor + ydist : lst->ycoor - ydist;
 	}
 	return &GraphCoor(xcoor, ycoor);
+
+}
+
+
+
+HRESULT BaseWnd::loadBitmapFromFile(
+	ID2D1RenderTarget* pRenderTarget,
+	IWICImagingFactory* pIWICFactory,
+	PCWSTR uri,
+	UINT destinationWidth,
+	UINT destinationHeight,
+	ID2D1Bitmap **ppBitmap
+)
+{
+	IWICBitmapDecoder *pDecoder = NULL;
+	IWICBitmapFrameDecode *pSource = NULL;
+	IWICStream *pStream = NULL;
+	IWICFormatConverter *pConverter = NULL;
+	IWICBitmapScaler *pScaler = NULL;
+
+	HRESULT hr = pIWICFactory->CreateDecoderFromFilename(
+		uri,
+		NULL,
+		GENERIC_READ,
+		WICDecodeMetadataCacheOnLoad,
+		&pDecoder
+	);
+	if (SUCCEEDED(hr))
+	{
+		// Create the initial frame.
+		hr = pDecoder->GetFrame(0, &pSource);
+	}
+	// Create the scaler.
+	if (SUCCEEDED(hr))
+	{
+		hr = pIWICFactory->CreateBitmapScaler(&pScaler);
+	}
+	// Initialize the scaler to half the size of the original source.
+	UINT x, y;
+	UINT *w = &x, *h = &y;
+	pSource->GetSize(w, h);
+	if (SUCCEEDED(hr))
+	{
+		hr = pScaler->Initialize(
+			pSource,									 // Bitmap source to scale.
+			destinationWidth,							 // Scale width to half of original.
+			destinationHeight,						     // Scale height to half of original.
+			WICBitmapInterpolationModeFant);		     // Use Fant mode interpolation.
+	}
+	if (SUCCEEDED(hr))
+	{
+
+		// Convert the image format to 32bppPBGRA
+		// (DXGI_FORMAT_B8G8R8A8_UNORM + D2D1_ALPHA_MODE_PREMULTIPLIED).
+		hr = pIWICFactory->CreateFormatConverter(&pConverter);
+
+	}
+	if (SUCCEEDED(hr))
+	{
+		hr = pConverter->Initialize(
+			pSource,
+			GUID_WICPixelFormat32bppPBGRA,
+			WICBitmapDitherTypeNone,
+			NULL,
+			0.f,
+			WICBitmapPaletteTypeMedianCut
+		);
+	}
+	if (SUCCEEDED(hr))
+	{
+
+		// Create a Direct2D bitmap from the WIC bitmap.
+		hr = pRenderTarget->CreateBitmapFromWicBitmap(
+			pConverter,
+			NULL,
+			ppBitmap
+		);
+	}
+
+	SafeRelease(&pDecoder);
+	SafeRelease(&pSource);
+	SafeRelease(&pStream);
+	SafeRelease(&pConverter);
+	SafeRelease(&pScaler);
+
+	return hr;
+}
+
+void BaseWnd::drawHouse(ID2D1RenderTarget* rt, float x, float y, float width, float height, ID2D1SolidColorBrush* brush)
+{
+	rt->DrawLine(
+		D2D1::Point2F(x - width / 2, y),
+		D2D1::Point2F(x, y - height / 2),
+		brush
+	);
+	rt->DrawLine(
+		D2D1::Point2F(x, y - height / 2),
+		D2D1::Point2F(x + width / 4, y - height / 4),
+		brush
+	);
+	rt->DrawLine(
+		D2D1::Point2F(x + width / 4, y - height / 4),
+		D2D1::Point2F(x + width / 4, y - height / 2),
+		brush
+	);
+	rt->DrawLine(
+		D2D1::Point2F(x + width / 4, y - height / 2),
+		D2D1::Point2F(x + (width * 3) / 8, y - height / 2),
+		brush
+	);
+	rt->DrawLine(
+		D2D1::Point2F(x + (width * 3) / 8, y - height / 2),
+		D2D1::Point2F(x + (width * 3) / 8, y - height / 8),
+		brush
+	);
+	rt->DrawLine(
+		D2D1::Point2F(x + (width * 3) / 8, y - height / 8),
+		D2D1::Point2F(x + width / 2, y),
+		brush
+	);
+	rt->DrawLine(
+		D2D1::Point2F(x + width / 2, y),
+		D2D1::Point2F(x + (width * 3) / 8, y),
+		brush
+	);
+	rt->DrawLine(
+		D2D1::Point2F(x + (width * 3) / 8, y),
+		D2D1::Point2F(x + (width * 3) / 8, y + height / 2),
+		brush
+	);
+	rt->DrawLine(
+		D2D1::Point2F(x + (width * 3) / 8, y + height / 2),
+		D2D1::Point2F(x - (width * 3) / 8, y + height / 2),
+		brush
+	);
+	rt->DrawLine(
+		D2D1::Point2F(x - (width * 3) / 8, y + height / 2),
+		D2D1::Point2F(x - (width * 3) / 8, y),
+		brush
+	);
+	rt->DrawLine(
+		D2D1::Point2F(x - (width * 3) / 8, y),
+		D2D1::Point2F(x - (width * 4) / 8, y),
+		brush
+	);
+}
+
+void BaseWnd::drawShop(ID2D1RenderTarget* rt, float x, float y, float width, float height, ID2D1SolidColorBrush* brush) {
+	rt->DrawLine(
+		D2D1::Point2F(x - width / 2, y - height / 6),
+		D2D1::Point2F(x - width / 4, y - height / 2),
+		brush
+	);
+	rt->DrawLine(
+		D2D1::Point2F(x - width / 4, y - height / 2),
+		D2D1::Point2F(x + width / 4, y - height / 2),
+		brush
+	);
+	rt->DrawLine(
+		D2D1::Point2F(x + width / 4, y - height / 2),
+		D2D1::Point2F(x + width / 2, y - height / 6),
+		brush
+	);
+	float ellibasey = y - height / 6;
+	ID2D1GeometrySink *pSink = NULL;
+	// Create a path geometry.
+	HRESULT hr = pDirect2dFactory->CreatePathGeometry(&pPathGeometry);
+	if (SUCCEEDED(hr))
+	{
+		// Write to the path geometry using the geometry sink.
+		hr = pPathGeometry->Open(&pSink);
+
+		if (SUCCEEDED(hr))
+		{
+			pSink->BeginFigure(
+				D2D1::Point2F(x - width / 2, ellibasey),
+				D2D1_FIGURE_BEGIN_FILLED
+			);
+
+			pSink->AddArc(D2D1::ArcSegment(
+				D2D1::Point2F(x - width / 4, ellibasey),
+				D2D1::SizeF(width / 8, height / 8),
+				180,
+				D2D1_SWEEP_DIRECTION_COUNTER_CLOCKWISE,
+				D2D1_ARC_SIZE_SMALL
+			));
+			pSink->AddArc(D2D1::ArcSegment(
+				D2D1::Point2F(x, ellibasey),
+				D2D1::SizeF(width / 8, height / 8),
+				180,
+				D2D1_SWEEP_DIRECTION_COUNTER_CLOCKWISE,
+				D2D1_ARC_SIZE_SMALL
+			));
+			pSink->AddArc(D2D1::ArcSegment(
+				D2D1::Point2F(x + width / 4, ellibasey),
+				D2D1::SizeF(width / 8, height / 8),
+				180,
+				D2D1_SWEEP_DIRECTION_COUNTER_CLOCKWISE,
+				D2D1_ARC_SIZE_SMALL
+			));
+			pSink->AddArc(D2D1::ArcSegment(
+				D2D1::Point2F(x + width / 2, ellibasey),
+				D2D1::SizeF(width / 8, height / 8),
+				180,
+				D2D1_SWEEP_DIRECTION_COUNTER_CLOCKWISE,
+				D2D1_ARC_SIZE_SMALL
+			));
+			pSink->EndFigure(D2D1_FIGURE_END_OPEN);
+
+			hr = pSink->Close();
+		}
+		SafeRelease(&pSink);
+	}
+	rt->DrawGeometry(pPathGeometry, pLightSeaGreenBrush);
+	//rt->DrawEllipse(
+	//	D2D1::Ellipse(D2D1::Point2F(x - (width * 3) / 8, ellibasey), width / 4, height / 6),
+	//	brush
+	//);
+	//rt->DrawEllipse(
+	//	D2D1::Ellipse(D2D1::Point2F(x - (width * 1) / 8, ellibasey), width / 4, height / 6),
+	//	brush
+	//);
+	//rt->DrawEllipse(
+	//	D2D1::Ellipse(D2D1::Point2F(x + (width * 1) / 8, ellibasey), width / 4, height / 6),
+	//	brush
+	//);
+	//rt->DrawEllipse(
+	//	D2D1::Ellipse(D2D1::Point2F(x + (width * 3) / 8, ellibasey), width / 4, height / 6),
+	//	brush
+	//);
+	rt->DrawLine(
+		D2D1::Point2F(x - width / 3, y + height / 2),
+		D2D1::Point2F(x - width / 3, y),
+		brush
+	);
+	rt->DrawLine(
+		D2D1::Point2F(x + width / 3, y + height / 2),
+		D2D1::Point2F(x + width / 3, y),
+		brush
+	);
+	rt->DrawLine(
+		D2D1::Point2F(x - width / 2, y + height / 2),
+		D2D1::Point2F(x + width / 2, y + height / 2),
+		brush
+	);
+}
+
+void BaseWnd::drawCar(ID2D1RenderTarget* rt, float x, float y, float width, float height, ID2D1SolidColorBrush* brush, int state) {
 
 }

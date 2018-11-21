@@ -48,9 +48,9 @@ struct PDVertice : public Vertice
 	};
 	PDVertice *pairver;
 	vertype type;
-	int strt_time;              // timer_time order come out or timer_time pickup point is ready
-	int left_tw;                // left timer_time window
-	int right_tw;               // right timer_time window
+	int strt_time;              // time order come out or time pickup point is ready
+	int left_tw;                // left time window
+	int right_tw;               // right time window
 	int tolerate_time;
 	int order_no;
 	int vrtc_no;
@@ -77,6 +77,7 @@ struct GraphModel
 	int tolerate_time;
 	int speed = 1;
 	int vehicle_size;
+	int stride = 20;
 
 	GraphModel() {}
 

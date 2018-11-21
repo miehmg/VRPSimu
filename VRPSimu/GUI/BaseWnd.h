@@ -47,10 +47,32 @@ private:
 		WPARAM wParam,
 		LPARAM lParam
 	);
+
+	HRESULT loadBitmapFromFile(
+		ID2D1RenderTarget* pRenderTarget,
+		IWICImagingFactory* pIWICFactory,
+		PCWSTR uri,
+		UINT destinationWidth,
+		UINT destinationHeight,
+		ID2D1Bitmap **ppBitmap
+	);
+	void drawHouse(ID2D1RenderTarget* rt, float x, float y, float width, float height, ID2D1SolidColorBrush* brush);
+	void drawShop(ID2D1RenderTarget* rt, float x, float y, float width, float height, ID2D1SolidColorBrush* brush);
+	void drawCar(ID2D1RenderTarget* rt, float x, float y, float width, float height, ID2D1SolidColorBrush* brush, int state);
 private:
 	HWND hwnd;
+	ID2D1Bitmap* pCarBitmap;
+	ID2D1Bitmap* pShopBitmap;
+	ID2D1Bitmap* pHouseBitmap;
+	ID2D1BitmapBrush* pCarBitmapBrush;
+	ID2D1BitmapBrush* pShopBitmapBrush;
+	ID2D1BitmapBrush* pHouseBitmapBrush;
 	ID2D1Factory* pDirect2dFactory;
+	IWICImagingFactory* pIWICFactory;
 	ID2D1HwndRenderTarget* pRenderTarget;
+	ID2D1BitmapRenderTarget* pBitmapRenderTarget;
+	ID2D1PathGeometry* pPathGeometry;
+	ID2D1GeometrySink* pSink;				// PathGeometry Sink
 	ID2D1SolidColorBrush* pLightSlateGrayBrush;
 	ID2D1SolidColorBrush* pCornflowerBlueBrush;
 	ID2D1SolidColorBrush* pPaleVioletRedBrush;
@@ -60,10 +82,10 @@ private:
 	IDWriteFactory* pDWriteFactory;
 	IDWriteTextFormat* pTextFormat;
 
+	int timer_time;
+	bool end = false;
 	D2D1_POINT_2F pMouse;
 	vector<bool> draw_locus;
-	bool end = false;
-	int timer_time;
 	std::tuple<GraphModel&, Solution&>* model;
-};
+	};
 

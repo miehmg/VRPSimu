@@ -39,6 +39,7 @@ struct Move
 struct VerticeEvent
 {
 	shared_ptr<Vertice> vertice;
+	vector<GraphCoor> path;
 	TmSpot arrive_time;
 	TmSpot compl_time;
 	TmSpot leave_time = INT32_MAX;
