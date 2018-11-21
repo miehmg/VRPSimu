@@ -923,7 +923,7 @@ void BaseWnd::OnMouseMove(int pixelX, int pixelY, DWORD flags)
 {
 }
 
-void BaseWnd::drawLocus&Cars(Route r, float time)
+GraphCoor* BaseWnd::getlocation(Route r, float time)
 {
 	GraphModel gm = std::get<0>(*this->model);
 	GraphCoor *lst = NULL, *curr = NULL, *next = NULL;
