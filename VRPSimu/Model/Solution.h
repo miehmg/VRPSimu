@@ -46,8 +46,8 @@ struct VerticeEvent
 	int vehicle_number = INT32_MIN;
 	int vertice_number = INT32_MIN;
 
+	VerticeEvent(){}
 	VerticeEvent(int vn) : vehicle_number(vn) {}
-
 	VerticeEvent(shared_ptr<Vertice> v) : vertice(v)
 	{
 		if (auto pdv = std::dynamic_pointer_cast<PDVertice>(v))

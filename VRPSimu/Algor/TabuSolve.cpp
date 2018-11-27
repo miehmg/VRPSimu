@@ -405,19 +405,20 @@ uint32_t DynamicTabuSolve(GraphModel &graph_model, Solution &solution, int wait_
 				vhcl_routes[i].move_chain.back().vehicle_number = i;
 			}
 			vhcl_routes[nextvhcl].move_chain.push_back(tmp_vhcl_routes.at(nextvhcl).move_chain[1]);
-			VerticeEvent lastve = vhcl_routes[nextvhcl].move_chain.back();
+			VerticeEvent &lastve = vhcl_routes[nextvhcl].move_chain.back();
 			VerticeEvent lastbut2ve = vhcl_routes[nextvhcl].move_chain[vhcl_routes[nextvhcl].move_chain.size() - 2];
 			int stride = graph_model.stride;
+			int space = graph_model.geo_size / graph_model.stride;
 			GraphCoor l = lastbut2ve.vertice->coor, n = lastve.vertice->coor;
 			bool xpos = n.xcoor > l.xcoor ? true : false;
 			bool ypos = n.ycoor > l.ycoor ? true : false;
 			vector<GraphCoor> path;
 			path.push_back(l);
-			int lx = l.xcoor % stride == 0 ? l.xcoor : l.xcoor - l.xcoor % stride + xpos ? stride : -stride;
-			int ly = l.ycoor % stride == 0 ? l.ycoor : l.ycoor - l.ycoor % stride + ypos ? stride : -stride;
+			int lx = l.xcoor % space == 0 ? l.xcoor : l.xcoor - l.xcoor % space + ((xpos xor l.xcoor > 0) ? 0 : (xpos ? +space : -space));
+			int ly = l.ycoor % space == 0 ? l.ycoor : l.ycoor - l.ycoor % space + ((ypos xor l.ycoor > 0) ? 0 : (ypos ? +space : -space));
 			path.push_back(GraphCoor(lx, ly));
-			int nx = n.xcoor % stride == 0 ? n.xcoor : n.xcoor - n.xcoor % stride + xpos ? stride : -stride;
-			int ny = n.ycoor % stride == 0 ? n.ycoor : n.ycoor - n.ycoor % stride + ypos ? stride : -stride;
+			int nx = n.xcoor % space == 0 ? n.xcoor : n.xcoor - n.xcoor % space + ((!xpos xor n.xcoor > 0) ? 0 : (!xpos ? +space : -space));
+			int ny = n.ycoor % space == 0 ? n.ycoor : n.ycoor - n.ycoor % space + ((!ypos xor n.ycoor > 0) ? 0 : (!ypos ? +space : -space));
 			auto gen = std::bind(std::uniform_int_distribution<>(0, 1), std::default_random_engine());
 			bool xfirst = gen();		// which direction first
 			if (xfirst)
@@ -431,6 +432,7 @@ uint32_t DynamicTabuSolve(GraphModel &graph_model, Solution &solution, int wait_
 				path.push_back(GraphCoor(nx, ny));
 			}
 			path.push_back(n);
+			lastve.path = path;
 
 			nextstart = nextstart > tm_hrz ? nextstart : tm_hrz;
 			// cout << std::right

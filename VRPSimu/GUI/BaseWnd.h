@@ -2,13 +2,21 @@
 #include "../Model/GraphModel.h"
 #include "../Model/Solution.h"
 
+enum vhcl_state
+{
+	left = 1,
+	up = 2,
+	right = 3,
+	down = 4
+};
+
 class BaseWnd {
 public:
 	BaseWnd();
 	~BaseWnd();
 	HRESULT Initialize(std::tuple<GraphModel&, Solution&>*);
 	void RunMessageLoop();
-	GraphCoor* getlocation(Route r, float timer_time);
+	void getlocation(Route r, float timer_time, GraphCoor* gc);
 protected:
 private:
 	HRESULT StartTimer(HWND hwnd);
@@ -71,8 +79,9 @@ private:
 	IWICImagingFactory* pIWICFactory;
 	ID2D1HwndRenderTarget* pRenderTarget;
 	ID2D1BitmapRenderTarget* pBitmapRenderTarget;
-	ID2D1PathGeometry* pPathGeometry;
-	ID2D1GeometrySink* pSink;				// PathGeometry Sink
+	//ID2D1PathGeometry* pShopGeometry;
+	//ID2D1PathGeometry* pLeftCarGeometry;
+	//ID2D1PathGeometry* pUpCarGeometry;
 	ID2D1SolidColorBrush* pLightSlateGrayBrush;
 	ID2D1SolidColorBrush* pCornflowerBlueBrush;
 	ID2D1SolidColorBrush* pPaleVioletRedBrush;

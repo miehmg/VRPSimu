@@ -7,7 +7,7 @@
 #pragma comment(lib, "dwrite.lib")
 #pragma comment(lib, "windowscodecs.lib")
 
-static UINT32 time_slice = 500;
+static UINT32 time_slice = 5000;
 static float animate_time;
 static int brush_number;
 static vector<bool> showlocus;
@@ -327,6 +327,18 @@ HRESULT BaseWnd::CreateDeviceDependentResources()
 				}
 			}
 		}
+		//if (SUCCEEDED(hr))
+		//{
+		//	HRESULT hr = pDirect2dFactory->CreatePathGeometry(&pShopGeometry);
+		//}
+		//if (SUCCEEDED(hr))
+		//{
+		//	HRESULT hr = pDirect2dFactory->CreatePathGeometry(&pLeftCarGeometry);
+		//}
+		//if (SUCCEEDED(hr))
+		//{
+		//	HRESULT hr = pDirect2dFactory->CreatePathGeometry(&pUpCarGeometry);
+		//}
 	}
 
 	return hr;
@@ -615,6 +627,7 @@ HRESULT BaseWnd::OnRender(float animate_time, float mouse_x, float mouse_y, bool
 		if (!end)
 			// not end
 		{
+			// start in x-axis of main screen
 			float stridex = (width - height) / 2;
 			for (int i = 0; i <= stride; i++)
 			{
@@ -700,16 +713,20 @@ HRESULT BaseWnd::OnRender(float animate_time, float mouse_x, float mouse_y, bool
 			// #car
 			for (Route r : routes)
 			{
-				GraphCoor* gc = getlocation(r, animate_time);
+				GraphCoor* gc = &GraphCoor();
+				getlocation(r, animate_time, gc);
 				if (gc == NULL) {
 					continue;
 				}
 				float x = gc->xcoor * min(width, height) / gm.geo_size + width / 2;
 				float y = -gc->ycoor * min(width, height) / gm.geo_size + height / 2;
-				D2D1_ELLIPSE dot = D2D1::Ellipse(D2D1::Point2F(x, y), 3, 3);
 				//drawHouse(pRenderTarget, x, y, 24, 24, pLightSeaGreenBrush);
-				drawShop(pRenderTarget, x, y, 24, 24, pLightSeaGreenBrush);
-				//pRenderTarget->FillEllipse(dot, pCornflowerBlueBrush);
+				//drawShop(pRenderTarget, x, y, 24, 24, pLightSeaGreenBrush);
+				vhcl_state upv = up;
+				int state = up * 100;
+				//drawCar(pRenderTarget, x, y, 24, 24, pLightSeaGreenBrush, state);
+				D2D1_ELLIPSE dot = D2D1::Ellipse(D2D1::Point2F(x, y), 3, 3);
+				pRenderTarget->FillEllipse(dot, pCornflowerBlueBrush);
 				//pRenderTarget->DrawBitmap(
 				//	pCarBitmap,
 				//	D2D1::RectF(x - 10, y - 10, x + 10, y + 10)
@@ -923,11 +940,12 @@ void BaseWnd::OnMouseMove(int pixelX, int pixelY, DWORD flags)
 {
 }
 
-GraphCoor* BaseWnd::getlocation(Route r, float time)
+void BaseWnd::getlocation(Route r, float time, GraphCoor* gc)
 {
 	GraphModel gm = std::get<0>(*this->model);
 	GraphCoor *lst = NULL, *curr = NULL, *next = NULL;
 	int lsttime = INT_MIN, nexttime = INT_MIN;
+	VerticeEvent currve, nextve, lstve;
 
 	auto pve = r.move_chain.begin();
 	pve++;
@@ -936,32 +954,38 @@ GraphCoor* BaseWnd::getlocation(Route r, float time)
 		VerticeEvent ve = *pve;
 		if (ve.compl_time == time)
 		{
+			currve = ve;
 			curr = &ve.vertice->getCoor();
 			break;
 		}
 		else if (ve.compl_time > time)
 		{
+			nextve = ve;
 			next = &ve.vertice->getCoor();
 			nexttime = ve.compl_time;
 			break;
 		}
 		else
 		{
+			lstve = ve;
 			lst = &ve.vertice->getCoor();
 			lsttime = ve.compl_time;
 		}
 	}
 	if (curr != NULL)
 	{
-		return curr;
+		*gc = *curr;
+		return;
 	}
 	if (lst == NULL)
 	{
-		return NULL;
+		gc = NULL;
+		return;
 	}
 	if (next == NULL)
 	{
-		return lst;
+		*gc = *lst;
+		return;
 	}
 
 	// the vehicle waited for some time
@@ -972,25 +996,52 @@ GraphCoor* BaseWnd::getlocation(Route r, float time)
 		time = time > lsttime ? time : lsttime;
 	}
 	int dis = (time - lsttime) * gm.speed;
-	auto gen = std::bind(std::uniform_int_distribution<>(0, 1), std::default_random_engine());
-	bool xfirst = gen();		// which direction first
-	int xcoor, ycoor;
 
-	if (xfirst)
+	int xcoor, ycoor;
+	vector<GraphCoor> graph = nextve.path;
+	auto pgc = graph.begin();
+	GraphCoor l = *pgc;
+	pgc++;
+	for (; pgc != graph.end(); pgc++)
 	{
-		int xdist = abs(lst->xcoor - next->xcoor) > dis ? dis : abs(lst->xcoor - next->xcoor);
-		int ydist = dis - xdist;
-		xcoor = lst->xcoor < next->xcoor ? lst->xcoor - xdist : lst->xcoor - xdist;
-		ycoor = lst->ycoor < next->ycoor ? lst->ycoor + ydist : lst->ycoor - ydist;
+		GraphCoor n = *pgc;
+		int d = distance(l, n);
+		if (dis == d)
+		{
+			*gc = n;
+			return;
+		}
+		else if (dis < d)
+		{
+			float x, y;
+			// below is only true because l and n have the same x coor or y coor.
+			x = l.xcoor + dis * (n.xcoor - l.xcoor) / d;
+			y = l.ycoor + dis * (n.ycoor - l.ycoor) / d;
+			*gc = GraphCoor(x, y);
+			return;
+		}
+		else if (dis > d)
+		{
+			dis -= d;
+		}
+		l = n;
 	}
-	else
-	{
-		int ydist = abs(lst->ycoor - next->ycoor) > dis ? dis : abs(lst->ycoor - next->ycoor);
-		int xdist = dis - ydist;
-		xcoor = lst->xcoor < next->xcoor ? lst->xcoor + xdist : lst->xcoor - xdist;
-		ycoor = lst->ycoor < next->ycoor ? lst->ycoor + ydist : lst->ycoor - ydist;
-	}
-	return &GraphCoor(xcoor, ycoor);
+
+	//if (xfirst)
+	//{
+	//	int xdist = abs(lst->xcoor - next->xcoor) > dis ? dis : abs(lst->xcoor - next->xcoor);
+	//	int ydist = dis - xdist;
+	//	xcoor = lst->xcoor < next->xcoor ? lst->xcoor - xdist : lst->xcoor - xdist;
+	//	ycoor = lst->ycoor < next->ycoor ? lst->ycoor + ydist : lst->ycoor - ydist;
+	//}
+	//else
+	//{
+	//	int ydist = abs(lst->ycoor - next->ycoor) > dis ? dis : abs(lst->ycoor - next->ycoor);
+	//	int xdist = dis - ydist;
+	//	xcoor = lst->xcoor < next->xcoor ? lst->xcoor + xdist : lst->xcoor - xdist;
+	//	ycoor = lst->ycoor < next->ycoor ? lst->ycoor + ydist : lst->ycoor - ydist;
+	//}
+	//return &GraphCoor(xcoor, ycoor);
 
 }
 
@@ -1157,11 +1208,12 @@ void BaseWnd::drawShop(ID2D1RenderTarget* rt, float x, float y, float width, flo
 	float ellibasey = y - height / 6;
 	ID2D1GeometrySink *pSink = NULL;
 	// Create a path geometry.
-	HRESULT hr = pDirect2dFactory->CreatePathGeometry(&pPathGeometry);
+	ID2D1PathGeometry *pShopGeometry;
+	HRESULT hr = pDirect2dFactory->CreatePathGeometry(&pShopGeometry);
 	if (SUCCEEDED(hr))
 	{
 		// Write to the path geometry using the geometry sink.
-		hr = pPathGeometry->Open(&pSink);
+		HRESULT hr = pShopGeometry->Open(&pSink);
 
 		if (SUCCEEDED(hr))
 		{
@@ -1203,8 +1255,8 @@ void BaseWnd::drawShop(ID2D1RenderTarget* rt, float x, float y, float width, flo
 			hr = pSink->Close();
 		}
 		SafeRelease(&pSink);
+		rt->DrawGeometry(pShopGeometry, brush);
 	}
-	rt->DrawGeometry(pPathGeometry, pLightSeaGreenBrush);
 	//rt->DrawEllipse(
 	//	D2D1::Ellipse(D2D1::Point2F(x - (width * 3) / 8, ellibasey), width / 4, height / 6),
 	//	brush
@@ -1238,6 +1290,70 @@ void BaseWnd::drawShop(ID2D1RenderTarget* rt, float x, float y, float width, flo
 	);
 }
 
-void BaseWnd::drawCar(ID2D1RenderTarget* rt, float x, float y, float width, float height, ID2D1SolidColorBrush* brush, int state) {
 
+void BaseWnd::drawCar(ID2D1RenderTarget* rt, float x, float y, float width, float height, ID2D1SolidColorBrush* brush, int state) {
+	// Create a path geometry.
+	ID2D1PathGeometry *pCarGeometry;
+	HRESULT hr = pDirect2dFactory->CreatePathGeometry(&pCarGeometry);
+	if (SUCCEEDED(hr))
+	{
+		ID2D1GeometrySink *pSink = NULL;
+		// Write to the path geometry using the geometry sink.
+		int direction = state / 100;
+		float wheel = 2;
+		HRESULT hr = pCarGeometry->Open(&pSink);
+		if (SUCCEEDED(hr))
+		{
+			switch (direction)
+			{
+			case up:
+				pSink->BeginFigure(
+					D2D1::Point2F(x - width / 4, y + height / 2),
+					D2D1_FIGURE_BEGIN_FILLED
+				);
+				pSink->AddArc(D2D1::ArcSegment(
+					D2D1::Point2F(x - width / 4, y + height / 2 - wheel),
+					D2D1::SizeF(wheel, wheel),
+					180,
+					D2D1_SWEEP_DIRECTION_CLOCKWISE,
+					D2D1_ARC_SIZE_SMALL
+				));
+				pSink->AddLine(D2D1::Point2F(x - width / 4, y + height / 2));
+				pSink->AddLine(D2D1::Point2F(x - width / 4, y - height / 4));
+				pSink->AddArc(D2D1::ArcSegment(
+					D2D1::Point2F(x - width / 4, y - height / 4 + wheel),
+					D2D1::SizeF(wheel, wheel),
+					180,
+					D2D1_SWEEP_DIRECTION_COUNTER_CLOCKWISE,
+					D2D1_ARC_SIZE_SMALL
+				));
+				pSink->AddLine(D2D1::Point2F(x - width / 6, y - height / 2));
+				pSink->AddLine(D2D1::Point2F(x + width / 6, y - height / 2));
+				pSink->AddLine(D2D1::Point2F(x + width / 4, y - height / 4));
+				pSink->AddArc(D2D1::ArcSegment(
+					D2D1::Point2F(x + width / 4, y - height / 4 + wheel),
+					D2D1::SizeF(wheel, wheel),
+					180,
+					D2D1_SWEEP_DIRECTION_CLOCKWISE,
+					D2D1_ARC_SIZE_SMALL
+				));
+				pSink->AddLine(D2D1::Point2F(x - width / 4, y - height / 4));
+				pSink->AddLine(D2D1::Point2F(x + width / 4, y - height / 4));
+				pSink->AddLine(D2D1::Point2F(x + width / 4, y + height / 2));
+				pSink->AddArc(D2D1::ArcSegment(
+					D2D1::Point2F(x + width / 4, y + height / 2 - wheel),
+					D2D1::SizeF(wheel, wheel),
+					180,
+					D2D1_SWEEP_DIRECTION_COUNTER_CLOCKWISE,
+					D2D1_ARC_SIZE_SMALL
+				));
+				pSink->AddLine(D2D1::Point2F(x - width / 4, y + height / 2));
+				pSink->EndFigure(D2D1_FIGURE_END_OPEN);
+				break;
+			}
+			hr = pSink->Close();
+			SafeRelease(&pSink);
+		}
+		rt->DrawGeometry(pCarGeometry, brush);
+	}
 }

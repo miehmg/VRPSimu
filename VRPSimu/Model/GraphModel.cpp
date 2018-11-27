@@ -1,4 +1,5 @@
 #include "GraphModel.h"
+#include <functional>
 
 int distance(GraphCoor gr1, GraphCoor gr2)
 {
@@ -40,14 +41,25 @@ void InitializePDVertices(GraphModel &sg, const vector<int> &time_vec, const vec
 	std::default_random_engine e(seed);
 	std::normal_distribution<> n(0, sg.geo_size / 6);
 	std::normal_distribution<> m(5, 1);
+	auto gen = std::bind(std::uniform_int_distribution<>(0, 1), std::default_random_engine());
 	for (int i = 0; i != sg.order_size; ++i)
 	{
+		bool m1 = gen();			// which coor(x or y) is multiple of stride space
+		bool m2 = gen();
 		int x1 = lround(n(e));
 		int y1 = lround(n(e));
 		int t1 = time_vec[i];
+		if (m1)
+			x1 = x1 - x1 % (sg.geo_size / sg.stride);
+		else
+			y1 = y1 - y1 % (sg.geo_size / sg.stride);
 		int x2 = lround(n(e));
 		int y2 = lround(n(e));
 		int t2 = t1 + m(e);
+		if (m2)
+			x2 = x2 - x2 % (sg.geo_size / sg.stride);
+		else
+			y2 = y2 - y2 % (sg.geo_size / sg.stride);
 		GraphCoor gracor1{ x1, y1 };
 		GraphCoor gracor2{ x2, y2 };
 		sg.vertices.emplace_back(gracor1, t1, t2, PDVertice::isorigin, i, sg.tolerate_time);
